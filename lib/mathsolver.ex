@@ -250,14 +250,21 @@ defmodule Mathsolver do
   end
 
   defp parse_model_reply(text) when is_binary(text) do
-    start = String.index(text, "{")
-    e = String.rindex(text, "}")
+    start = case :binary.match(text, "{") do
+      {i, _} -> i
+      :nomatch -> nil
+    end
+
+    e = text |> :binary.matches("}") |> List.last() |> case do
+      nil -> nil
+      {i, _} -> i
+    end
 
     if is_nil(start) or is_nil(e) or e <= start do
       raise Mathsolver.Error, {:"INVALID_JSON", "no JSON object in reply"}
     end
 
-    body = String.slice(text, start..e)
+    body = binary_part(text, start, e - start + 1)
 
     case Jason.decode(body) do
       {:ok, data} ->
