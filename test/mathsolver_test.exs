@@ -25,6 +25,11 @@ defmodule MathsolverTest do
     end
   end
 
+  test "new validates credentials" do
+    assert {:error, {:"NO_API_KEY", _}} = Mathsolver.new(api_key: "")
+    assert {:error, {:"BAD_BASE_URL", _}} = Mathsolver.new(api_key: "sk", base_url: "not-a-url")
+  end
+
   test "solve verified first try" do
     {:ok, agent} = Agent.start_link(fn -> %{calls: 0, url: nil, key: nil} end)
 
@@ -33,7 +38,8 @@ defmodule MathsolverTest do
       {:ok, @good}
     end
 
-    r = Mathsolver.solve("2x + 3 = 11, solve for x", api_key: "sk-test", transport: tr)
+    {:ok, solver} = Mathsolver.new(api_key: "sk-test", base_url: "https://api.deepseek.com/v1", model: "deepseek-chat", transport: tr)
+    {:ok, r} = Mathsolver.solve(solver, "2x + 3 = 11, solve for x")
     assert r.verified
     assert r.answer == 4
     assert r.evaluated == 4
@@ -52,7 +58,8 @@ defmodule MathsolverTest do
       {:ok, if(n == 1, do: @wrong, else: @good)}
     end
 
-    r = Mathsolver.solve("2x+3=11", api_key: "sk", transport: tr)
+    {:ok, solver} = Mathsolver.new(api_key: "sk", transport: tr)
+    {:ok, r} = Mathsolver.solve(solver, "2x+3=11")
     assert r.verified
     assert r.retries == 1
   end
@@ -65,17 +72,19 @@ defmodule MathsolverTest do
       {:ok, if(n == 1, do: "no json", else: @good)}
     end
 
-    r = Mathsolver.solve("1+1", api_key: "sk", transport: tr)
+    {:ok, solver} = Mathsolver.new(api_key: "sk", transport: tr)
+    {:ok, r} = Mathsolver.solve(solver, "1+1")
     assert r.verified
   end
 
-  test "invalid twice raises" do
+  test "invalid twice returns error" do
     tr = fn _u, _b, _k -> {:ok, "nothing"} end
-    assert_raise Mathsolver, fn -> Mathsolver.solve("1+1", api_key: "sk", transport: tr) end
+    {:ok, solver} = Mathsolver.new(api_key: "sk", transport: tr)
+    assert {:error, {:"INVALID_JSON", _}} = Mathsolver.solve(solver, "1+1")
   end
 
-  test "no api key raises" do
-    assert_raise Mathsolver, fn -> Mathsolver.solve("1+1", []) end
+  test "no api key fails at new" do
+    assert {:error, {:"NO_API_KEY", _}} = Mathsolver.new(api_key: "")
   end
 
   test "http error no retry" do
@@ -86,13 +95,15 @@ defmodule MathsolverTest do
       {:error, {:"HTTP_ERROR", "401"}}
     end
 
-    assert_raise Mathsolver, fn -> Mathsolver.solve("1+1", api_key: "sk", transport: tr) end
+    {:ok, solver} = Mathsolver.new(api_key: "sk", transport: tr)
+    assert {:error, {:"HTTP_ERROR", _}} = Mathsolver.solve(solver, "1+1")
     assert Agent.get(agent, & &1) == 1
   end
 
   test "still wrong unverified" do
     tr = fn _u, _b, _k -> {:ok, @wrong} end
-    r = Mathsolver.solve("2x+3=11", api_key: "sk", transport: tr)
+    {:ok, solver} = Mathsolver.new(api_key: "sk", transport: tr)
+    {:ok, r} = Mathsolver.solve(solver, "2x+3=11")
     refute r.verified
     assert r.retries == 1
   end

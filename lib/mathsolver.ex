@@ -288,105 +288,123 @@ defmodule Mathsolver do
     end
   end
 
-  @doc """
-  Solve a math problem with a BYOK key on an OpenAI-compatible endpoint.
+  defstruct [:api_key, :base_url, :model, :transport]
 
-  transport: `(url, body_json, api_key) -> {:ok, model_reply} | {:error, reason}` (test injection)
+  @doc """
+  BYOK client for an OpenAI-compatible endpoint. Instantiate once, solve many.
+
+      {:ok, solver} = MathSolver.new(api_key: "sk-...", base_url: "https://api.deepseek.com/v1", model: "deepseek-chat")
+      {:ok, result} = MathSolver.solve(solver, "2x + 3 = 11, solve for x")
   """
-  def solve(problem, opts \\ []) do
+  @spec new(keyword()) :: {:ok, %__MODULE__{}} | {:error, term()}
+  def new(opts \ []) do
     api_key = Keyword.get(opts, :api_key, "")
-    base_url = Keyword.get(opts, :base_url, "https://api.openai.com/v1")
-    model = Keyword.get(opts, :model, "gpt-4o-mini")
-    transport = Keyword.get(opts, :transport, &default_transport/3)
 
     if api_key == "" do
-      raise __MODULE__, {:"NO_API_KEY", "api_key is required (BYOK)"}
+      {:error, {:"NO_API_KEY", "api_key is required (BYOK)"}}
+    else
+      base = String.replace_trailing(to_string(Keyword.get(opts, :base_url, "https://api.openai.com/v1")), "/", "")
+
+      if not String.starts_with?(base, ["http://", "https://"]) do
+        {:error, {:"BAD_BASE_URL", "base_url must be an http(s) URL, e.g. https://api.deepseek.com/v1"}}
+      else
+        {:ok,
+         %__MODULE__{
+           api_key: api_key,
+           base_url: base,
+           model: Keyword.get(opts, :model, "gpt-4o-mini"),
+           transport: Keyword.get(opts, :transport, &default_transport/3)
+         }}
+      end
     end
+  end
+
+  @doc "Like `new/1` but raises on invalid arguments."
+  @spec new!(keyword()) :: %__MODULE__{}
+  def new!(opts \ []) do
+    case new(opts) do
+      {:ok, solver} -> solver
+      {:error, {code, msg}} -> raise __MODULE__, {code, msg}
+    end
+  end
+
+  @doc "Solve a math problem. `verified` is true only when the expression re-evaluates to the answer."
+  @spec solve(%__MODULE__{}, String.t()) :: {:ok, map()} | {:error, term()}
+  def solve(%__MODULE__{} = solver, problem) do
+    %{api_key: api_key, base_url: base_url, model: model, transport: transport} = solver
 
     if String.trim(problem) == "" do
-      raise __MODULE__, {:"NO_PROBLEM", "problem must be non-empty"}
-    end
+      {:error, {:"NO_PROBLEM", "problem must be non-empty"}}
+    else
+      url = base_url <> "/chat/completions"
 
-    url = String.replace_trailing(base_url, "/", "") <> "/chat/completions"
+      messages = [
+        %{role: "system", content: @system_prompt},
+        %{role: "user", content: problem}
+      ]
 
-    messages = [
-      %{role: "system", content: @system_prompt},
-      %{role: "user", content: problem}
-    ]
+      call = fn msgs ->
+        body = Jason.encode!(%{model: model, messages: msgs, temperature: 0})
 
-    call = fn msgs ->
-      body = Jason.encode!(%{model: model, messages: msgs, temperature: 0})
-
-      case transport.(url, body, api_key) do
-        {:ok, reply} -> reply
-        {:error, {code, msg}} -> raise __MODULE__, {code, msg}
-        {:error, reason} -> raise __MODULE__, {:"HTTP_ERROR", to_string(reason)}
-      end
-    end
-
-    parsed =
-      try do
-        parse_model_reply(call.(messages))
-      rescue
-        e in __MODULE__ ->
-          if e.code != :"INVALID_JSON" do
-            reraise e, __STACKTRACE__
-          end
-
-          messages =
-            messages ++
-              [
-                %{role: "assistant", content: "invalid JSON"},
-                %{role: "user", content: "Your reply was not valid JSON. Reply again with the exact strict JSON shape."}
-              ]
-
-          parse_model_reply(call.(messages))
-      end
-
-    evaluate = fn p ->
-      try do
-        ev = eval_expression(p.expression)
-        {ev, numerically_equal(ev, p.answer)}
-      rescue
-        _ -> {nil, false}
-      end
-    end
-
-    {evaluated, verified} = evaluate.(parsed)
-    {parsed, verified, evaluated, retries} =
-      if verified do
-        {parsed, true, evaluated, 0}
-      else
-        messages =
-          messages ++
-            [
-              %{role: "user",
-                content:
-                  "Your verification expression evaluated to #{evaluated || "an error"}, " <>
-                    "which does not match your answer #{parsed.answer}. " <>
-                    "Re-derive carefully and reply again with the same strict JSON shape."}
-            ]
-
-        try do
-          second = parse_model_reply(call.(messages))
-
-          case evaluate.(second) do
-            {ev2, true} -> {second, true, ev2, 1}
-            {ev2, false} -> {parsed, false, ev2 || evaluated, 1}
-          end
-        rescue
-          _ -> {parsed, false, evaluated, 1}
+        case transport.(url, body, api_key) do
+          {:ok, reply} -> reply
+          {:error, {code, msg}} -> raise __MODULE__, {code, msg}
+          {:error, reason} -> raise __MODULE__, {:"HTTP_ERROR", to_string(reason)}
         end
       end
 
-    %{
-      answer: parsed.answer,
-      steps: parsed.steps,
-      expression: parsed.expression,
-      evaluated: evaluated,
-      verified: verified,
-      retries: retries
-    }
+      try do
+        parsed = parse_model_reply(call.(messages))
+        evaluate = fn p ->
+          try do
+            ev = eval_expression(p.expression)
+            {ev, numerically_equal(ev, p.answer)}
+          rescue
+            _ -> {nil, false}
+          end
+        end
+
+        {evaluated, verified} = evaluate.(parsed)
+
+        {parsed, verified, evaluated, retries} =
+          if verified do
+            {parsed, true, evaluated, 0}
+          else
+            messages =
+              messages ++
+                [
+                  %{role: "user",
+                    content:
+                      "Your verification expression evaluated to #{evaluated || "an error"}, " <>
+                        "which does not match your answer #{parsed.answer}. " <>
+                        "Re-derive carefully and reply again with the same strict JSON shape."}
+                ]
+
+            try do
+              second = parse_model_reply(call.(messages))
+
+              case evaluate.(second) do
+                {ev2, true} -> {second, true, ev2, 1}
+                {ev2, false} -> {parsed, false, ev2 || evaluated, 1}
+              end
+            rescue
+              _ -> {parsed, false, evaluated, 1}
+            end
+          end
+
+        {:ok,
+         %{
+           answer: parsed.answer,
+           steps: parsed.steps,
+           expression: parsed.expression,
+           evaluated: evaluated,
+           verified: verified,
+           retries: retries
+         }}
+      rescue
+        e in __MODULE__ -> {:error, {e.code, e.message}}
+      end
+    end
   end
 
   def default_transport(url, body, api_key) do
