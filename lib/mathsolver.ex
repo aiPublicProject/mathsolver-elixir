@@ -69,7 +69,10 @@ defmodule Mathsolver do
 
     tokens =
       Regex.scan(regex, src, capture: :all_but_first)
-      |> Enum.flat_map(fn [num, id, op] ->
+      |> Enum.reject(&(&1 == [] or Enum.all?(&1, fn g -> is_nil(g) end)))
+      |> Enum.flat_map(fn groups ->
+        [num, id, op] = Enum.map(groups, fn g -> g || "" end)
+
         cond do
           num != "" -> [{:num, String.to_float(normalize(num))}]
           id != "" -> [{:id, id}]
