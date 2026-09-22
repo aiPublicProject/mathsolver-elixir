@@ -21,7 +21,7 @@ defmodule MathsolverTest do
 
   test "evaluator rejects bad input" do
     for bad <- ["System.cmd(\"x\")", "1+2)", "foo(1)", ""] do
-      assert_raise Mathsolver, fn -> Mathsolver.eval_expression(bad) end
+      assert_raise Mathsolver.Error, fn -> Mathsolver.eval_expression(bad) end
     end
   end
 

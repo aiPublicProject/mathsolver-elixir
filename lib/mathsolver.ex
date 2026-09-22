@@ -1,3 +1,7 @@
+defmodule Mathsolver.Error do
+  @moduledoc "Solver error with a machine-readable `code`."
+end
+
 defmodule Mathsolver do
   @moduledoc """
   BYOK AI math solver with independent verification.
@@ -19,12 +23,6 @@ defmodule Mathsolver do
   - The expression must recompute the answer independently.
   """
 
-  defexception [:code, :message]
-
-  @impl true
-  def exception({code, message}) when is_atom(code) do
-    %__MODULE__{code: code, message: message}
-  end
 
   @funcs %{
     "abs" => {:erlang, :abs},
@@ -43,7 +41,7 @@ defmodule Mathsolver do
   @doc "Evaluate a pure arithmetic expression string."
   def eval_expression(src) when is_binary(src) do
     if String.trim(src) == "" do
-      raise __MODULE__, {:"EXPR_EMPTY", "empty expression"}
+      raise Mathsolver.Error, {:"EXPR_EMPTY", "empty expression"}
     end
 
     tokens = tokenize(src)
@@ -51,11 +49,11 @@ defmodule Mathsolver do
     {value, pos} = parse_expr(tokens, 0)
 
     if pos != length(tokens) do
-      raise __MODULE__, {:"EXPR_TRAILING", "trailing tokens"}
+      raise Mathsolver.Error, {:"EXPR_TRAILING", "trailing tokens"}
     end
 
     if not is_number(value) or :erlang.abs(value) == :infinity do
-      raise __MODULE__, {:"EXPR_NON_FINITE", "non-finite result"}
+      raise Mathsolver.Error, {:"EXPR_NON_FINITE", "non-finite result"}
     end
 
     value
@@ -81,7 +79,7 @@ defmodule Mathsolver do
       |> Enum.sum()
 
     if String.length(String.trim(src)) > covered do
-      raise __MODULE__, {:"EXPR_BAD_CHAR", "unexpected character"}
+      raise Mathsolver.Error, {:"EXPR_BAD_CHAR", "unexpected character"}
     end
 
     tokens
@@ -95,7 +93,7 @@ defmodule Mathsolver do
 
   defp eat(tokens, pos) do
     case Enum.at(tokens, pos) do
-      nil -> raise __MODULE__, {:"EXPR_SYNTAX", "expected more tokens"}
+      nil -> raise Mathsolver.Error, {:"EXPR_SYNTAX", "expected more tokens"}
       tok -> {tok, pos + 1}
     end
   end
@@ -199,7 +197,7 @@ defmodule Mathsolver do
             case name do
               "pi" -> {:math.pi(), pos}
               "e" -> {:math.exp(1), pos}
-              _ -> raise __MODULE__, {:"EXPR_UNKNOWN_ID", "unknown identifier #{name}"}
+              _ -> raise Mathsolver.Error, {:"EXPR_UNKNOWN_ID", "unknown identifier #{name}"}
             end
         end
 
@@ -207,11 +205,11 @@ defmodule Mathsolver do
         {v, pos} = parse_expr(tokens, pos)
         case eat(tokens, pos) do
           {{:op, ")"}, pos} -> {v, pos}
-          _ -> raise __MODULE__, {:"EXPR_SYNTAX", "expected )"}
+          _ -> raise Mathsolver.Error, {:"EXPR_SYNTAX", "expected )"}
         end
 
       {:op, other} ->
-        raise __MODULE__, {:"EXPR_SYNTAX", "unexpected token #{other}"}
+        raise Mathsolver.Error, {:"EXPR_SYNTAX", "unexpected token #{other}"}
     end
   end
 
@@ -228,7 +226,7 @@ defmodule Mathsolver do
         {Enum.reverse(Enum.reverse(acc ++ [v])), pos}
 
       _ ->
-        raise __MODULE__, {:"EXPR_SYNTAX", "expected ) or ,"}
+        raise Mathsolver.Error, {:"EXPR_SYNTAX", "expected ) or ,"}
     end
   end
 
@@ -238,7 +236,7 @@ defmodule Mathsolver do
   defp apply_func(name, args, _tokens, pos) do
     case Map.get(@funcs, name) do
       {mod, fun} -> {apply(mod, fun, [hd(args)]), pos}
-      nil -> raise __MODULE__, {:"EXPR_UNKNOWN_FUNC", "unknown function #{name}"}
+      nil -> raise Mathsolver.Error, {:"EXPR_UNKNOWN_FUNC", "unknown function #{name}"}
     end
   end
 
@@ -251,7 +249,7 @@ defmodule Mathsolver do
     e = String.rindex(text, "}")
 
     if is_nil(start) or is_nil(e) or e <= start do
-      raise __MODULE__, {:"INVALID_JSON", "no JSON object in reply"}
+      raise Mathsolver.Error, {:"INVALID_JSON", "no JSON object in reply"}
     end
 
     body = String.slice(text, start..e)
@@ -264,15 +262,15 @@ defmodule Mathsolver do
             s when is_binary(s) ->
               case Regex.run(~r/-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/, s) do
                 [m] -> String.to_float(normalize(m))
-                _ -> raise __MODULE__, {:"INVALID_JSON", "missing numeric answer"}
+                _ -> raise Mathsolver.Error, {:"INVALID_JSON", "missing numeric answer"}
               end
-            _ -> raise __MODULE__, {:"INVALID_JSON", "missing numeric answer"}
+            _ -> raise Mathsolver.Error, {:"INVALID_JSON", "missing numeric answer"}
           end
 
         expression = get_in(data, ["verification", "expression"])
 
         if not is_binary(expression) do
-          raise __MODULE__, {:"INVALID_JSON", "missing verification.expression"}
+          raise Mathsolver.Error, {:"INVALID_JSON", "missing verification.expression"}
         end
 
         steps =
@@ -284,7 +282,7 @@ defmodule Mathsolver do
         %{answer: answer, steps: steps, expression: expression}
 
       {:error, _} ->
-        raise __MODULE__, {:"INVALID_JSON", "reply was not valid JSON"}
+        raise Mathsolver.Error, {:"INVALID_JSON", "reply was not valid JSON"}
     end
   end
 
@@ -324,7 +322,7 @@ defmodule Mathsolver do
   def new!(opts \\ []) do
     case new(opts) do
       {:ok, solver} -> solver
-      {:error, {code, msg}} -> raise __MODULE__, {code, msg}
+      {:error, {code, msg}} -> raise Mathsolver.Error, {code, msg}
     end
   end
 
@@ -348,8 +346,8 @@ defmodule Mathsolver do
 
         case transport.(url, body, api_key) do
           {:ok, reply} -> reply
-          {:error, {code, msg}} -> raise __MODULE__, {code, msg}
-          {:error, reason} -> raise __MODULE__, {:"HTTP_ERROR", to_string(reason)}
+          {:error, {code, msg}} -> raise Mathsolver.Error, {code, msg}
+          {:error, reason} -> raise Mathsolver.Error, {:"HTTP_ERROR", to_string(reason)}
         end
       end
 
@@ -402,7 +400,7 @@ defmodule Mathsolver do
            retries: retries
          }}
       rescue
-        e in __MODULE__ -> {:error, {e.code, e.message}}
+        e in Mathsolver.Error -> {:error, {e.code, e.message}}
       end
     end
   end
