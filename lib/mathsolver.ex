@@ -1,5 +1,10 @@
 defmodule Mathsolver.Error do
   @moduledoc "Solver error with a machine-readable `code`."
+  defexception [:code, :message]
+
+  def exception({code, message}) when is_atom(code) do
+    %__MODULE__{code: code, message: message}
+  end
 end
 
 defmodule Mathsolver do
