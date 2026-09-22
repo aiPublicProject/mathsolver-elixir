@@ -368,7 +368,25 @@ defmodule Mathsolver do
       end
 
       try do
-        parsed = parse_model_reply(call.(messages))
+        parsed =
+          try do
+            parse_model_reply(call.(messages))
+          rescue
+            e in Mathsolver.Error ->
+              if e.code != :"INVALID_JSON" do
+                reraise(e, __STACKTRACE__)
+              end
+
+              messages =
+                messages ++
+                  [
+                    %{role: "assistant", content: "invalid JSON"},
+                    %{role: "user", content: "Your reply was not valid JSON. Reply again with the exact strict JSON shape."}
+                  ]
+
+              parse_model_reply(call.(messages))
+          end
+
         evaluate = fn p ->
           try do
             ev = eval_expression(p.expression)
