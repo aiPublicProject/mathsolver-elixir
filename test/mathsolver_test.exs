@@ -5,18 +5,18 @@ defmodule MathsolverTest do
   @wrong Jason.encode!(%{answer: 4, steps: ["..."], verification: %{expression: "(11-3)/3"}})
 
   test "evaluator precedence" do
-    assert_in_delta Mathsolver.eval_expression("2*3+4"), 10, 1e-9
-    assert_in_delta Mathsolver.eval_expression("2+3*4"), 14, 1e-9
-    assert_in_delta Mathsolver.eval_expression("(2+3)*4"), 20, 1e-9
-    assert_in_delta Mathsolver.eval_expression("2^3^2"), 512, 1e-9
-    assert_in_delta Mathsolver.eval_expression("-3^2"), -9, 1e-9
+    assert_in_delta Mathsolver.eval_expression("2*3+4"), 10, 1.0e-9
+    assert_in_delta Mathsolver.eval_expression("2+3*4"), 14, 1.0e-9
+    assert_in_delta Mathsolver.eval_expression("(2+3)*4"), 20, 1.0e-9
+    assert_in_delta Mathsolver.eval_expression("2^3^2"), 512, 1.0e-9
+    assert_in_delta Mathsolver.eval_expression("-3^2"), -9, 1.0e-9
   end
 
   test "evaluator functions" do
-    assert_in_delta Mathsolver.eval_expression("sqrt(16)"), 4, 1e-9
-    assert_in_delta Mathsolver.eval_expression("min(3,5)"), 3, 1e-9
-    assert_in_delta Mathsolver.eval_expression("pi"), :math.pi(), 1e-12
-    assert_in_delta Mathsolver.eval_expression("log(1000)"), 3, 1e-9
+    assert_in_delta Mathsolver.eval_expression("sqrt(16)"), 4, 1.0e-9
+    assert_in_delta Mathsolver.eval_expression("min(3,5)"), 3, 1.0e-9
+    assert_in_delta Mathsolver.eval_expression("pi"), :math.pi(), 1.0e-12
+    assert_in_delta Mathsolver.eval_expression("log(1000)"), 3, 1.0e-9
   end
 
   test "evaluator rejects bad input" do
