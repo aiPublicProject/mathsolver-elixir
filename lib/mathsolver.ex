@@ -297,7 +297,7 @@ defmodule Mathsolver do
       {:ok, result} = MathSolver.solve(solver, "2x + 3 = 11, solve for x")
   """
   @spec new(keyword()) :: {:ok, %__MODULE__{}} | {:error, term()}
-  def new(opts \ []) do
+  def new(opts \\ []) do
     api_key = Keyword.get(opts, :api_key, "")
 
     if api_key == "" do
@@ -321,7 +321,7 @@ defmodule Mathsolver do
 
   @doc "Like `new/1` but raises on invalid arguments."
   @spec new!(keyword()) :: %__MODULE__{}
-  def new!(opts \ []) do
+  def new!(opts \\ []) do
     case new(opts) do
       {:ok, solver} -> solver
       {:error, {code, msg}} -> raise __MODULE__, {code, msg}
