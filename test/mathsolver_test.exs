@@ -242,8 +242,19 @@ defmodule MathsolverTest do
     key = System.get_env("SMOKE_API_KEY")
 
     if key do
-      base = System.get_env("SMOKE_BASE_URL") || "https://api.openai.com/v1"
-      {:ok, solver} = Mathsolver.new(api_key: key, base_url: base)
+      base =
+        case System.get_env("SMOKE_BASE_URL") do
+          b when is_binary(b) and b != "" -> b
+          _ -> "https://api.openai.com/v1"
+        end
+
+      model =
+        case System.get_env("SMOKE_MODEL") do
+          m when is_binary(m) and m != "" -> m
+          _ -> "gpt-4o-mini"
+        end
+
+      {:ok, solver} = Mathsolver.new(api_key: key, base_url: base, model: model)
       {:ok, r} = Mathsolver.solve(solver, "2x + 3 = 11, solve for x")
       IO.puts("smoke: answer=#{inspect(r.answer)} verified=#{inspect(r.verified)} retries=#{inspect(r.retries)}")
       assert r.verified
