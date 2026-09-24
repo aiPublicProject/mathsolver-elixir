@@ -536,7 +536,7 @@ defmodule Mathsolver do
 
               case attempt.(second_parsed) do
                 {:err, e} ->
-                  reraise(e, __STACKTRACE__)
+                  raise(e)
 
                 second ->
                   {second_parsed, second, 1}
