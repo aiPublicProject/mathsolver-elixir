@@ -564,6 +564,10 @@ defmodule Mathsolver do
   Swap it out via `new(http_post: ...)` to test the default transport without sockets.
   """
   def real_http_post(url, headers, body) do
+    # :httpc needs the :inets/:ssl applications started before first use
+    # (mix test does not start them unless declared).
+    {:ok, _} = Application.ensure_all_started(:inets)
+    {:ok, _} = Application.ensure_all_started(:ssl)
     # :httpc validates header field names as charlists — binaries raise
     # {:headers_error, :invalid_field}, so convert before the request.
     headers = Enum.map(headers, fn {k, v} -> {to_charlist(k), to_charlist(v)} end)
