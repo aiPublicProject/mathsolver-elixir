@@ -564,6 +564,10 @@ defmodule Mathsolver do
   Swap it out via `new(http_post: ...)` to test the default transport without sockets.
   """
   def real_http_post(url, headers, body) do
+    # :httpc validates header field names as charlists — binaries raise
+    # {:headers_error, :invalid_field}, so convert before the request.
+    headers = Enum.map(headers, fn {k, v} -> {to_charlist(k), to_charlist(v)} end)
+
     case :httpc.request(:post, {String.to_charlist(url), headers, ~c"application/json", body}, [], []) do
       {:ok, {{_, status, _}, _, resp_body}} -> {:ok, {status, to_string(resp_body)}}
       {:error, reason} -> {:error, {:"HTTP_ERROR", inspect(reason)}}
