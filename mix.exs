@@ -4,12 +4,12 @@ defmodule Mathsolver.MixProject do
   def project do
     [
       app: :mathsolver,
-      version: "0.1.0",
+      version: "0.2.0",
       elixir: "~> 1.13",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       description:
-        "BYOK AI math solver with independent verification — bring your own OpenAI-compatible API key, answers verified by local expression evaluation.",
+        "BYOK AI math solver with execution-based verification (PAL-style) — bring your own OpenAI-compatible API key; the answer is computed locally by executing a model-generated program, never taken from a number the model stated.",
       package: package()
     ]
   end
@@ -28,7 +28,7 @@ defmodule Mathsolver.MixProject do
       licenses: ["MIT"],
       links: %{
         "Homepage" => "https://mathsolver.help",
-        "GitHub" => "https://github.com/mathsolver-help/mathsolver-elixir"
+        "GitHub" => "https://github.com/aiPublicProject/mathsolver-elixir"
       }
     ]
   end
